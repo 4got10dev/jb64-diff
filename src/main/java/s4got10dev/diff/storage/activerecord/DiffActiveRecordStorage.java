@@ -1,0 +1,56 @@
+package s4got10dev.diff.storage.activerecord;
+
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Service;
+
+import s4got10dev.diff.model.AddDiffPartRequest;
+import s4got10dev.diff.model.AddDiffPartResponse;
+import s4got10dev.diff.model.DiffComparisonResult;
+import s4got10dev.diff.model.Part;
+import s4got10dev.diff.storage.DiffStorage;
+import s4got10dev.diff.util.DiffChecker;
+
+/**
+ * @author Serhii Homeniuk
+ */
+@Service
+@Profile("ar")
+public class DiffActiveRecordStorage implements DiffStorage {
+
+    private DiffRepository repository;
+    private DiffChecker checker;
+
+    public DiffActiveRecordStorage(DiffRepository repository, DiffChecker checker) {
+        this.repository = repository;
+        this.checker = checker;
+    }
+
+    @Override
+    public DiffComparisonResult getDiffResult(Long id) {
+        return repository.findById(id).map(diff -> checker.makeComparisonEncoded(diff.getLeft(), diff.getRight()))
+                .orElse(checker.noData());
+    }
+
+    @Override
+    public AddDiffPartResponse addLeft(Long id, AddDiffPartRequest request) {
+        return addDiffPart(id, request, Part.LEFT);
+    }
+
+    @Override
+    public AddDiffPartResponse addRight(Long id, AddDiffPartRequest request) {
+        return addDiffPart(id, request, Part.RIGHT);
+    }
+
+    private AddDiffPartResponse addDiffPart(Long id, AddDiffPartRequest request, Part part) {
+        Diff diff = repository.findById(id).orElseGet(Diff.builder().id(id)::build);
+
+        if (part == Part.LEFT)
+            diff.setLeft(request.getData());
+        else if (part == Part.RIGHT)
+            diff.setRight(request.getData());
+
+        repository.save(diff);
+
+        return AddDiffPartResponse.successful().id(id).part(part).build();
+    }
+}
